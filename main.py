@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
 from logic import extract_answers
+import os
 
 app = FastAPI(title="Document Q&A API", version="1.0.0")
 
@@ -27,7 +28,7 @@ async def ask_questions(request: QuestionRequest):
     answers = extract_answers(request.documents, request.questions)
     return QuestionResponse(answers=answers)
 
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
