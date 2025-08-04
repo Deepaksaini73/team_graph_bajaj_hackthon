@@ -1,8 +1,14 @@
-
 fastapi
 uvicorn
 google-generativeai
 PyMuPDF
 requests
 pydantic
+sentence-transformers
+faiss-cpu
+numpy
+tf-keras
+tensorflow<2.16
+transformers
+torch
 

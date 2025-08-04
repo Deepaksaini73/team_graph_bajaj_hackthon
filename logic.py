@@ -4,14 +4,18 @@ import google.generativeai as genai
 import os
 import re
 from typing import List
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
 
 # 👉 Replace with your actual Gemini API key
 genai.configure(api_key="AIzaSyBX7vw2ZiEju7qt1fRiP6HDYsxgGtvVycI")
 
-# Use the free tier model
-model = genai.GenerativeModel("gemini-2.0-flash-exp")
+# Initialize the sentence transformer model globally
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def download_and_extract_text(pdf_url):
+    """Download PDF and extract text"""
     try:
         response = requests.get(pdf_url, timeout=30)
         response.raise_for_status()
@@ -36,38 +40,90 @@ def download_and_extract_text(pdf_url):
             os.remove("temp.pdf")
         raise e
 
+def chunk_text(text, chunk_size=150):
+    """Split text into chunks for better retrieval"""
+    sentences = text.split(". ")
+    chunks, current_chunk = [], ""
+    for sentence in sentences:
+        if len(current_chunk) + len(sentence) < chunk_size:
+            current_chunk += sentence + ". "
+        else:
+            chunks.append(current_chunk.strip())
+            current_chunk = sentence + ". "
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    return chunks
+
+def embed_chunks(chunks, model):
+    """Create embeddings for text chunks"""
+    return model.encode(chunks)
+
+def create_faiss_index(embeddings):
+    """Create FAISS index for similarity search"""
+    dim = embeddings.shape[1]
+    index = faiss.IndexFlatL2(dim)
+    index.add(embeddings)
+    return index
+
+def retrieve_chunks(question, chunks, index, model, top_k=3):
+    """Retrieve most relevant chunks for a question"""
+    q_embed = model.encode([question])
+    distances, indices = index.search(np.array(q_embed), top_k)
+    return [chunks[i] for i in indices[0]]
+
+def ask_gemini(question, context_chunks):
+    """Ask Gemini with relevant context chunks"""
+    context = "\n\n".join(context_chunks)
+    prompt = f"""
+You are a policy assistant. Answer based ONLY on the following extracted clauses.
+
+Clauses:
+{context}
+
+Question: {question}
+Answer:"""
+
+    model = genai.GenerativeModel("gemini-2.0-flash-exp")
+    response = model.generate_content(prompt)
+    return response.text.strip()
+
 def extract_answers(doc_url, questions):
+    """Main function to extract answers using RAG approach"""
     try:
         # 1. Download and extract text from PDF
+        print("Downloading and extracting PDF text...")
         pdf_text = download_and_extract_text(doc_url)
-
-        # 2. Create prompt for Gemini
-        prompt = f"""
-You are a helpful assistant. Below is the content of a medical insurance policy PDF.
-Answer the following questions based only on the content of this document.
-Please provide answers in a numbered list format (1., 2., 3., etc.).
-
---- DOCUMENT START ---
-{pdf_text}
---- DOCUMENT END ---
-
-Questions:
-"""
-
-        for idx, q in enumerate(questions, 1):
-            prompt += f"{idx}. {q}\n"
         
-        prompt += "\nPlease answer each question clearly and concisely, numbered 1., 2., 3., etc."
+        if not pdf_text.strip():
+            return ["No text found in document."] * len(questions)
 
-        # 3. Send to Gemini with error handling
-        response = model.generate_content(prompt)
+        # 2. Chunk the text for better retrieval
+        print("Chunking text...")
+        chunks = chunk_text(pdf_text)
         
-        if not response or not response.text:
-            return ["No response from AI model."] * len(questions)
+        if not chunks:
+            return ["No valid chunks found in document."] * len(questions)
 
-        # 4. Parse the response more robustly
-        text = response.text.strip()
-        answers = parse_numbered_response(text, len(questions))
+        # 3. Create embeddings and FAISS index
+        print("Creating embeddings and index...")
+        embeddings = embed_chunks(chunks, embedding_model)
+        index = create_faiss_index(np.array(embeddings))
+
+        # 4. Answer each question using RAG
+        print("Answering questions with Gemini...")
+        answers = []
+        for question in questions:
+            try:
+                # Retrieve relevant chunks
+                relevant_chunks = retrieve_chunks(question, chunks, index, embedding_model)
+                
+                # Get answer from Gemini
+                answer = ask_gemini(question, relevant_chunks)
+                answers.append(answer)
+                
+            except Exception as e:
+                print(f"Error answering question '{question}': {e}")
+                answers.append(f"Error processing question: {str(e)}")
 
         return answers
         
@@ -76,7 +132,7 @@ Questions:
         return [f"Error: {str(e)}"] * len(questions)
 
 def parse_numbered_response(text: str, expected_count: int) -> List[str]:
-    """Parse numbered response from Gemini"""
+    """Parse numbered response from Gemini (kept for compatibility)"""
     answers = []
     
     # Try to find numbered answers (1., 2., 3., etc.)
@@ -123,7 +179,7 @@ if __name__ == "__main__":
                 "Is there a benefit for preventive health check-ups?",
                 "How does the policy define a 'Hospital'?",
                 "What is the extent of coverage for AYUSH treatments?",
-                "Are there any sub-limits on room rent and ICU charges for Plan A?"
+                "Are there any sub-limits on room rent and ICU charges for Plan A?"
     ]
     answers = extract_answers(url, questions)
     for q, a in zip(questions, answers):
