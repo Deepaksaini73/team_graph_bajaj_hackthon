@@ -40,165 +40,6 @@ def download_and_extract_text_v2(pdf_url):
             os.remove("temp_v2.pdf")
         raise e
 
-def lightweight_chunker_v2(text, max_chunk_size=8000):
-    """Lightweight text chunking optimized for insurance documents"""
-    if len(text) <= max_chunk_size:
-        return [text]
-    
-    # Split by common insurance document sections
-    section_patterns = [
-        r'\n--- PAGE \d+ ---\n',  # Page breaks
-        r'\n\d+\.\s+[A-Z][^.]+\n',  # Numbered sections
-        r'\n[A-Z][A-Z\s]+:\n',  # ALL CAPS headers
-        r'\n\n'  # Double newlines
-    ]
-    
-    chunks = []
-    current_chunk = ""
-    
-    # Split by paragraphs first
-    paragraphs = text.split('\n\n')
-    
-    for paragraph in paragraphs:
-        paragraph = paragraph.strip()
-        if not paragraph:
-            continue
-            
-        test_chunk = current_chunk + "\n\n" + paragraph if current_chunk else paragraph
-        
-        if len(test_chunk) <= max_chunk_size:
-            current_chunk = test_chunk
-        else:
-            # Save current chunk
-            if current_chunk:
-                chunks.append(current_chunk.strip())
-            current_chunk = paragraph
-    
-    # Add final chunk
-    if current_chunk:
-        chunks.append(current_chunk.strip())
-    
-    return chunks
-
-def enhanced_prompt_with_citations_v2(questions_text, processed_text):
-    """Create enhanced prompt with citation requirements - UNIVERSAL VERSION"""
-    return f"""DOCUMENT ANALYSIS EXPERT WITH SOURCE CITATIONS
-
-You are analyzing a document to answer questions accurately. For each question, provide the answer AND cite the exact text from the document that supports your answer.
-
-DOCUMENT CONTENT:
-{processed_text}
-
-QUESTIONS TO ANSWER:
-{questions_text}
-
-ANALYSIS RULES:
-- Extract EXACT information from the document (numbers, dates, percentages, amounts, time periods)
-- For any waiting periods or grace periods: State exact duration
-- For coverage or benefits: Include specific conditions and limits  
-- For definitions or terms: Use exact document language
-- Be precise with numerical values and technical terms
-
-RESPONSE FORMAT FOR EACH ANSWER:
-1. [Direct Answer based on document]
-   📋 Source: "[Exact text from document that supports this answer]"
-
-2. [Direct Answer based on document]
-   📋 Source: "[Exact text from document that supports this answer]"
-
-CRITICAL REQUIREMENTS:
-- Always include the 📋 Source citation with exact text from the document
-- If information is unclear or missing, state "Information not clearly specified in document"
-- Quote the EXACT sentence or phrase from the document
-- Make sure the source text directly supports your answer
-- Do not make assumptions - only use information explicitly stated in the document
-
-ANSWERS WITH EXACT CITATIONS:"""
-
-def safe_gemini_call_v2(prompt):
-    """Safe Gemini API call with better error handling"""
-    try:
-        # Use reliable free model
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.0,  # Maximum consistency
-                max_output_tokens=3000,  # Increased for citations
-                top_p=0.8,
-                top_k=20
-            ),
-            safety_settings=[
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
-            ]
-        )
-        
-        # Safe response extraction
-        if response and response.text:
-            return response.text.strip()
-        elif response.candidates and len(response.candidates) > 0:
-            candidate = response.candidates[0]
-            if candidate.content and candidate.content.parts:
-                return candidate.content.parts[0].text.strip()
-        
-        return "Unable to generate response from AI model"
-        
-    except Exception as e:
-        print(f"Gemini API error: {e}")
-        return f"AI model error: {str(e)}"
-
-def extract_answers_v2(doc_url, questions):
-    """Enhanced lightweight answer extraction for V2 with citations - UNIVERSAL"""
-    try:
-        print("🚀 Starting V2 enhanced extraction with citations...")
-        
-        # Step 1: Download and extract with page markers
-        print("📄 Downloading and extracting PDF with page context...")
-        pdf_text = download_and_extract_text_v2(doc_url)
-        
-        if not pdf_text.strip():
-            return ["No text found in document."] * len(questions)
-
-        print(f"📊 Extracted {len(pdf_text)} characters from PDF")
-
-        # Step 2: Smart processing based on document size
-        if len(pdf_text) > 25000:
-            print("🧠 Large document - using smart keyword-based extraction...")
-            processed_text = smart_keyword_search_v2(pdf_text, questions)
-        else:
-            print("📋 Small document - using full content...")
-            processed_text = pdf_text
-
-        print(f"🔍 Processing {len(processed_text)} characters of relevant content")
-
-        # Step 3: Format questions for better processing
-        questions_text = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
-        
-        # Step 4: Create enhanced UNIVERSAL prompt with citations
-        prompt = enhanced_prompt_with_citations_v2(questions_text, processed_text)
-        
-        # Step 5: Single optimized API call
-        print("🤖 Sending to Gemini for enhanced document analysis with citations...")
-        response_text = safe_gemini_call_v2(prompt)
-        
-        if "error" in response_text.lower():
-            return [response_text] * len(questions)
-
-        # Step 6: Parse with improved parsing including citations
-        print("📝 Parsing enhanced responses with citations...")
-        answers = parse_enhanced_response_with_citations_v2(response_text, len(questions))
-        
-        print("✅ V2 extraction with citations completed successfully")
-        return answers
-        
-    except Exception as e:
-        print(f"❌ Error in V2 extract_answers: {e}")
-        return [f"V2 Error: {str(e)}"] * len(questions)
-
 def smart_keyword_search_v2(text, questions):
     """Universal keyword-based relevant section finder for any document type"""
     # Extract keywords from questions
@@ -243,91 +84,226 @@ def smart_keyword_search_v2(text, questions):
     
     return combined_text if combined_text else text[:25000]
 
-def parse_enhanced_response_with_citations_v2(text: str, expected_count: int) -> List[str]:
-    """Enhanced response parsing with citation extraction"""
+def lightweight_chunker_v2(text, max_chunk_size=8000):
+    """Lightweight text chunking optimized for insurance documents"""
+    if len(text) <= max_chunk_size:
+        return [text]
+    
+    # Split by common insurance document sections
+    section_patterns = [
+        r'\n--- PAGE \d+ ---\n',  # Page breaks
+        r'\n\d+\.\s+[A-Z][^.]+\n',  # Numbered sections
+        r'\n[A-Z][A-Z\s]+:\n',  # ALL CAPS headers
+        r'\n\n'  # Double newlines
+    ]
+    
+    chunks = []
+    current_chunk = ""
+    
+    # Split by paragraphs first
+    paragraphs = text.split('\n\n')
+    
+    for paragraph in paragraphs:
+        paragraph = paragraph.strip()
+        if not paragraph:
+            continue
+            
+        test_chunk = current_chunk + "\n\n" + paragraph if current_chunk else paragraph
+        
+        if len(test_chunk) <= max_chunk_size:
+            current_chunk = test_chunk
+        else:
+            # Save current chunk
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            current_chunk = paragraph
+    
+    # Add final chunk
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    
+    return chunks
+
+def enhanced_prompt_with_clean_answers_v2(questions_text, processed_text):
+    """Create prompt for clean, concise answers without citations"""
+    return f"""DOCUMENT ANALYSIS - PROVIDE CLEAN, DIRECT ANSWERS
+
+You are analyzing a document to answer questions. Provide clear, direct answers in 1-4 sentences maximum.
+
+DOCUMENT CONTENT:
+{processed_text}
+
+QUESTIONS TO ANSWER:
+{questions_text}
+
+ANSWER REQUIREMENTS:
+- Give direct, factual answers from the document
+- Keep answers between 1-4 sentences maximum
+- Use simple, clear language
+- Include specific numbers, dates, percentages, amounts when mentioned
+- No citations, sources, or special formatting
+- No quotation marks or symbols
+- If information not found, simply state "Information not specified in document"
+
+PROVIDE CLEAN ANSWERS:"""
+
+def safe_gemini_call_v2(prompt):
+    """Safe Gemini API call with better error handling"""
+    try:
+        # Use reliable free model
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.0,  # Maximum consistency
+                max_output_tokens=1500,  # Reduced for concise answers
+                top_p=0.8,
+                top_k=20
+            ),
+            safety_settings=[
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
+            ]
+        )
+        
+        # Safe response extraction
+        if response and response.text:
+            return response.text.strip()
+        elif response.candidates and len(response.candidates) > 0:
+            candidate = response.candidates[0]
+            if candidate.content and candidate.content.parts:
+                return candidate.content.parts[0].text.strip()
+        
+        return "Unable to generate response from AI model"
+        
+    except Exception as e:
+        print(f"Gemini API error: {e}")
+        return f"AI model error: {str(e)}"
+
+def extract_answers_v2(doc_url, questions):
+    """Enhanced lightweight answer extraction for V2 - CLEAN ANSWERS"""
+    try:
+        print("🚀 Starting V2 enhanced extraction...")
+        
+        # Step 1: Download and extract with page markers
+        print("📄 Downloading and extracting PDF...")
+        pdf_text = download_and_extract_text_v2(doc_url)
+        
+        if not pdf_text.strip():
+            return ["No text found in document."] * len(questions)
+
+        print(f"📊 Extracted {len(pdf_text)} characters from PDF")
+
+        # Step 2: Smart processing based on document size
+        if len(pdf_text) > 25000:
+            print("🧠 Large document - using smart keyword-based extraction...")
+            processed_text = smart_keyword_search_v2(pdf_text, questions)
+        else:
+            print("📋 Small document - using full content...")
+            processed_text = pdf_text
+
+        print(f"🔍 Processing {len(processed_text)} characters of relevant content")
+
+        # Step 3: Format questions for better processing
+        questions_text = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
+        
+        # Step 4: Create clean, simple prompt
+        prompt = enhanced_prompt_with_clean_answers_v2(questions_text, processed_text)
+        
+        # Step 5: Single optimized API call
+        print("🤖 Sending to Gemini for clean answer analysis...")
+        response_text = safe_gemini_call_v2(prompt)
+        
+        if "error" in response_text.lower():
+            return [response_text] * len(questions)
+
+        # Step 6: Parse clean responses
+        print("📝 Parsing clean responses...")
+        answers = parse_clean_response_v2(response_text, len(questions))
+        
+        print("✅ V2 clean extraction completed successfully")
+        return answers
+        
+    except Exception as e:
+        print(f"❌ Error in V2 extract_answers: {e}")
+        return [f"V2 Error: {str(e)}"] * len(questions)
+
+def parse_clean_response_v2(text: str, expected_count: int) -> List[str]:
+    """Parse clean responses without citations or special formatting"""
     answers = []
     
-    # Strategy 1: Parse numbered answers with citations
-    # Look for pattern: 1. [answer] 📋 Source: "[citation]"
-    pattern = r'(\d+)\.\s*(.+?)(?=📋\s*Source:|$)'
-    citation_pattern = r'📋\s*Source:\s*"([^"]+)"'
+    # Strategy 1: Parse numbered answers (1., 2., 3., etc.)
+    pattern = r'^\s*(\d+)\.\s*(.+?)(?=^\s*\d+\.|$)'
+    matches = re.findall(pattern, text, re.MULTILINE | re.DOTALL)
     
-    # Split by numbered sections
-    sections = re.split(r'(?=\d+\.)', text)
+    if matches and len(matches) >= expected_count:
+        for i in range(1, expected_count + 1):
+            for num_str, answer_text in matches:
+                if int(num_str) == i:
+                    # Clean the answer text
+                    clean_answer = answer_text.strip()
+                    clean_answer = re.sub(r'\n+', ' ', clean_answer)  # Replace newlines with spaces
+                    clean_answer = re.sub(r'\s+', ' ', clean_answer)  # Normalize spaces
+                    
+                    # Remove any leftover formatting
+                    clean_answer = re.sub(r'📋.*$', '', clean_answer, flags=re.MULTILINE)
+                    clean_answer = re.sub(r'Source:.*$', '', clean_answer, flags=re.MULTILINE)
+                    clean_answer = re.sub(r'"[^"]*"$', '', clean_answer)  # Remove trailing quotes
+                    
+                    clean_answer = clean_answer.strip()
+                    answers.append(clean_answer)
+                    break
     
-    for section in sections:
-        if not section.strip():
-            continue
-            
-        # Extract number
-        num_match = re.match(r'^(\d+)\.', section.strip())
-        if not num_match:
-            continue
-            
-        num = int(num_match.group(1))
-        if num > expected_count:
-            continue
-        
-        # Extract answer part (before citation)
-        answer_text = section.strip()
-        
-        # Look for citation
-        citation_match = re.search(citation_pattern, answer_text)
-        citation = ""
-        if citation_match:
-            citation = citation_match.group(1)
-            # Remove citation from answer text
-            answer_text = re.sub(r'📋\s*Source:\s*"[^"]+"', '', answer_text)
-        
-        # Clean up answer
-        answer_text = re.sub(r'^\d+\.\s*', '', answer_text).strip()
-        answer_text = re.sub(r'\s+', ' ', answer_text)
-        
-        # Combine answer with citation if found
-        if citation:
-            final_answer = f"{answer_text}\n📋 Source: \"{citation}\""
-        else:
-            final_answer = answer_text
-        
-        # Ensure we have the right position
-        while len(answers) < num - 1:
-            answers.append("Information not clearly specified in document")
-        
-        if len(answers) == num - 1:
-            answers.append(final_answer)
-    
-    # Strategy 2: Fallback parsing if citations not properly formatted
+    # Strategy 2: Fallback parsing by lines
     if len(answers) < expected_count:
         lines = [line.strip() for line in text.split('\n') if line.strip()]
         current_answers = []
         current_answer = ""
         
         for line in lines:
+            # Skip citation lines
+            if '📋' in line or 'Source:' in line:
+                continue
+                
             if re.match(r'^\d+\.', line):
                 # Save previous answer
                 if current_answer:
-                    current_answers.append(current_answer.strip())
+                    clean_current = re.sub(r'\s+', ' ', current_answer.strip())
+                    current_answers.append(clean_current)
                 # Start new answer
                 current_answer = re.sub(r'^\d+\.\s*', '', line)
             else:
                 # Continuation of current answer
-                current_answer += " " + line
+                if not ('📋' in line or 'Source:' in line):
+                    current_answer += " " + line
         
         # Add last answer
         if current_answer:
-            current_answers.append(current_answer.strip())
+            clean_current = re.sub(r'\s+', ' ', current_answer.strip())
+            current_answers.append(clean_current)
         
         # Use fallback answers to fill gaps
         while len(answers) < expected_count and len(current_answers) > len(answers):
             answers.append(current_answers[len(answers)])
     
-    # Ensure we have exact count
+    # Ensure we have exact count with clean answers
     while len(answers) < expected_count:
-        answers.append("Information not clearly specified in document")
+        answers.append("Information not specified in document")
     
-    return answers[:expected_count]
+    # Final cleanup for all answers
+    final_answers = []
+    for answer in answers[:expected_count]:
+        # Remove any remaining special characters or formatting
+        clean = re.sub(r'[📋"\'`]', '', answer)
+        clean = re.sub(r'\s+', ' ', clean).strip()
+        final_answers.append(clean)
+    
+    return final_answers
 
-# ✅ Test function for V2 with citations
+# ✅ Test function for V2
 if __name__ == "__main__":
     import time
     start_time = time.time()
@@ -339,7 +315,7 @@ if __name__ == "__main__":
         "Does this policy cover maternity expenses, and what are the conditions?"
     ]
     
-    print("🧪 Testing V2 Logic with Citations...")
+    print("🧪 Testing V2 Logic...")
     answers = extract_answers_v2(url, questions)
     
     end_time = time.time()
