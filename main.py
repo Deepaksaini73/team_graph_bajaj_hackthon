@@ -3,9 +3,10 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import List
 from logic import extract_answers
+from logic_v2 import extract_answers_v2  # Import V2 function
 import os
 
-app = FastAPI(title="Document Q&A API", version="1.0.0")
+app = FastAPI(title="Document Q&A API", version="2.0.0")
 security = HTTPBearer()
 
 # Your team's auth token
@@ -30,21 +31,27 @@ class QuestionResponse(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"message": "Document Q&A API is running!"}
+    return {"message": "Document Q&A API v2.0 - Use /api/v1/hackrx/run (basic) or /api/v2/hackrx/run (enhanced)"}
 
 @app.post("/api/v1/hackrx/run", response_model=QuestionResponse)
-async def ask_questions(request: QuestionRequest, token: str = Depends(verify_token)):
-    """
-    Extract answers from documents based on provided questions
-    
-    Headers required:
-    - Authorization: Bearer 20c8eab302ed3ef3e0178c0e233611b785f20941c23c4343fbc5bbea9de4e3ea
-    
-    Body:
-    - **documents**: URL to PDF document
-    - **questions**: List of questions to answer
-    """
+async def ask_questions_v1(request: QuestionRequest, token: str = Depends(verify_token)):
+    """V1 Basic document Q&A"""
     answers = extract_answers(request.documents, request.questions)
+    return QuestionResponse(answers=answers)
+
+@app.post("/api/v2/hackrx/run", response_model=QuestionResponse)
+async def ask_questions_v2(request: QuestionRequest, token: str = Depends(verify_token)):
+    """
+    V2 Enhanced lightweight document Q&A
+    
+    Improvements:
+    - Smart keyword-based section extraction
+    - Enhanced prompting for insurance documents
+    - Better response parsing
+    - Page-aware processing
+    - Optimized for Render deployment (<512MB)
+    """
+    answers = extract_answers_v2(request.documents, request.questions)
     return QuestionResponse(answers=answers)
 
 if __name__ == "__main__":
