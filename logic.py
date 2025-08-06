@@ -140,7 +140,7 @@ ANSWERS:"""
 
         # 5. Single API call with fast model
         print("Sending to Gemini for analysis...")
-        model = genai.GenerativeModel("gemini-2.5-pro")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
