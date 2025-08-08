@@ -10,53 +10,50 @@ from typing import List
 genai.configure(api_key="AIzaSyC7wqktrMwFSs5SoqvyepwAImuga1zVCYw")
 
 def download_and_extract_text_v6(pdf_url):
-    """V6: Lightning-fast PDF extraction with enhanced error handling"""
+    """V6: Simple and robust PDF extraction (based on working V5 method)"""
     try:
-        response = requests.get(pdf_url, timeout=25, stream=True)
+        print(f"🔗 Downloading PDF...")
+        
+        # Simple, proven download method (like V5)
+        response = requests.get(pdf_url, timeout=20)
         response.raise_for_status()
         
+        print(f"✅ Downloaded {len(response.content)} bytes")
+        
         with open("temp_v6.pdf", "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+            f.write(response.content)
 
         doc = fitz.open("temp_v6.pdf")
         text = ""
         
-        # Enhanced extraction with fallback methods
+        print(f"📚 Processing {doc.page_count} pages...")
+        
+        # Simple extraction like V5 (proven to work)
         for page_num in range(doc.page_count):
-            try:
-                # Primary method: Standard text extraction
-                page_text = doc[page_num].get_text()
-                
-                # Fallback method: Dict extraction for better structure
-                if len(page_text.strip()) < 50:
-                    text_dict = doc[page_num].get_text("dict")
-                    page_text = extract_text_from_dict_v6(text_dict)
-                
-                # Enhanced text cleaning
-                page_text = advanced_text_cleaning_v6(page_text)
-                
-                # Smart page markers with content preview
-                preview = page_text[:100].replace('\n', ' ')
-                text += f"\n=== PAGE {page_num + 1} [{preview}...] ===\n{page_text}\n"
-                
-            except Exception as e:
-                print(f"Warning: Error processing page {page_num + 1}: {e}")
-                continue
+            page_text = doc[page_num].get_text()
+            
+            # Basic cleaning
+            page_text = advanced_text_cleaning_v6(page_text)
+            
+            # Simple page markers
+            text += f"\n--- PAGE {page_num + 1} ---\n{page_text}\n"
             
         doc.close()
         
         if os.path.exists("temp_v6.pdf"):
             os.remove("temp_v6.pdf")
-            
+        
+        print(f"✅ Extracted {len(text)} characters")
         return text
+        
     except Exception as e:
         if os.path.exists("temp_v6.pdf"):
             os.remove("temp_v6.pdf")
+        print(f"❌ PDF extraction error: {e}")
         raise e
 
 def extract_text_from_dict_v6(text_dict):
-    """V6: Extract text from PyMuPDF dict structure"""
+    """V6: Fallback text extraction (not used in simple mode)"""
     text = ""
     if "blocks" in text_dict:
         for block in text_dict["blocks"]:
@@ -70,156 +67,105 @@ def extract_text_from_dict_v6(text_dict):
     return text
 
 def advanced_text_cleaning_v6(text):
-    """V6: Advanced text cleaning with pattern recognition"""
-    # Fix OCR errors with context awareness
-    text = re.sub(r'\bO(?=\d)', '0', text)  # O to 0 before digits
-    text = re.sub(r'\bl(?=\d)', '1', text)  # l to 1 before digits
-    text = re.sub(r'\bS(?=\d)', '5', text)  # S to 5 before digits
-    text = re.sub(r'(?<=\d)O\b', '0', text)  # O to 0 after digits
+    """V6: Enhanced text cleaning (based on V5 but improved)"""
+    if not text:
+        return ""
+        
+    # Fix common OCR errors (from V5)
+    text = re.sub(r'\bO\b(?=\d)', '0', text)  # O to 0 in numbers
+    text = re.sub(r'\bl\b(?=\d)', '1', text)  # l to 1 in numbers
     
-    # Enhanced currency normalization
-    text = re.sub(r'\b(?:Rs\.?|INR|Rupees?)\s*', '₹', text, flags=re.IGNORECASE)
-    text = re.sub(r'₹\s*(\d)', r'₹\1', text)
+    # Normalize currency symbols (from V5)
+    text = re.sub(r'\bRs\.?\s*', '₹', text)
+    text = re.sub(r'\bINR\s*', '₹', text)
     
-    # Time period standardization
-    text = re.sub(r'(\d+)\s*(?:months?|MONTHS?|Months?)', r'\1 months', text)
-    text = re.sub(r'(\d+)\s*(?:years?|YEARS?|Years?)', r'\1 years', text)
-    text = re.sub(r'(\d+)\s*(?:days?|DAYS?|Days?)', r'\1 days', text)
+    # Fix spacing issues (from V5)
+    text = re.sub(r'\s+', ' ', text)  # Multiple spaces to single
+    text = re.sub(r'\n\s*\n', '\n\n', text)  # Clean paragraph breaks
     
-    # Percentage and number formatting
-    text = re.sub(r'(\d+)\s*%', r'\1%', text)
-    text = re.sub(r'(\d+)\s*(?:lakh|crore)', r'\1 \2', text, flags=re.IGNORECASE)
-    
-    # Fix broken words and sentences
-    text = re.sub(r'([a-z])\s*\n\s*([a-z])', r'\1\2', text)
-    text = re.sub(r'\s+', ' ', text)
-    text = re.sub(r'\n\s*\n', '\n\n', text)
+    # Fix common formatting issues (from V5)
+    text = re.sub(r'(\d+)\s*%', r'\1%', text)  # Fix percentage spacing
+    text = re.sub(r'(\d+)\s*₹', r'₹\1', text)  # Fix currency spacing
     
     return text.strip()
 
 def intelligent_keyword_extraction_v6(text, questions):
-    """V6: Intelligent keyword extraction with semantic grouping"""
+    """V6: Smart keyword extraction (improved from V5)"""
+    # Extract keywords like V5 but smarter
     all_keywords = []
-    important_phrases = []
-    question_types = []
-    
     for question in questions:
-        # Classify question type for better processing
-        q_lower = question.lower()
-        if any(word in q_lower for word in ['what is', 'how much', 'amount', 'limit']):
-            question_types.append('factual')
-        elif any(word in q_lower for word in ['does', 'is', 'are', 'can']):
-            question_types.append('boolean')
-        elif any(word in q_lower for word in ['when', 'how long', 'period']):
-            question_types.append('temporal')
-        else:
-            question_types.append('general')
-        
-        # Extract keywords with context
         words = re.findall(r'\b[a-zA-Z]{3,}\b', question.lower())
         all_keywords.extend(words)
         
-        # Extract important phrases
-        phrases = re.findall(r'\b(?:grace period|waiting period|pre.?existing|maternity|room rent|sum insured|deductible|co.?payment)\b', question.lower())
-        important_phrases.extend(phrases)
-        
-        # Extract abbreviations
+        # Extract abbreviations and important terms
         abbrevs = re.findall(r'\b[A-Z]{2,}\b', question)
         all_keywords.extend([abbrev.lower() for abbrev in abbrevs])
     
-    # Enhanced stop words with domain awareness
-    comprehensive_stop_words = {
-        'what', 'when', 'where', 'does', 'this', 'policy', 'under', 'with', 'from', 'that',
-        'have', 'will', 'can', 'are', 'the', 'and', 'for', 'how', 'why', 'who', 'which',
-        'any', 'all', 'some', 'may', 'must', 'not', 'but', 'his', 'her', 'you', 'your',
-        'our', 'their', 'has', 'had', 'been', 'being', 'have', 'do', 'did', 'should',
-        'would', 'could', 'might', 'shall', 'will', 'can', 'may', 'must', 'ought'
+    # Enhanced stop words (from V5)
+    stop_words = {
+        'what', 'when', 'where', 'does', 'this', 'policy', 'under', 'with', 
+        'from', 'that', 'have', 'will', 'can', 'are', 'the', 'and', 'for',
+        'how', 'why', 'who', 'which', 'any', 'all', 'some', 'may', 'must',
+        'not', 'but', 'his', 'her', 'you', 'your', 'our', 'their'
     }
     
-    # Domain-specific high-value terms with weights
-    domain_categories = {
-        'insurance_core': (['premium', 'coverage', 'deductible', 'claim', 'benefit', 'exclusion', 'rider', 'sum', 'insured'], 3),
-        'medical_terms': (['treatment', 'hospital', 'surgery', 'diagnosis', 'therapy', 'doctor', 'patient', 'medical', 'clinical'], 3),
-        'financial_data': (['amount', 'limit', 'payment', 'cost', 'fee', 'charge', 'expense', 'rate', 'percentage'], 2),
-        'time_periods': (['period', 'waiting', 'grace', 'duration', 'months', 'years', 'days', 'continuous'], 2),
-        'conditions': (['pre-existing', 'maternity', 'emergency', 'accident', 'illness', 'disease', 'chronic'], 2),
-        'coverage_types': (['inpatient', 'outpatient', 'daycare', 'domiciliary', 'ambulance', 'preventive'], 2)
+    # V6: Enhanced domain-specific terms with higher weights
+    domain_terms = {
+        'insurance': ['premium', 'coverage', 'deductible', 'claim', 'benefit', 'exclusion', 'rider', 'sum', 'insured'],
+        'medical': ['treatment', 'hospital', 'surgery', 'diagnosis', 'therapy', 'doctor', 'patient', 'maternity'],
+        'financial': ['amount', 'limit', 'payment', 'cost', 'fee', 'charge', 'expense', 'room', 'rent'],
+        'time': ['period', 'waiting', 'grace', 'duration', 'months', 'years', 'days'],
+        'legal': ['terms', 'conditions', 'clause', 'section', 'provision', 'ayush']
     }
     
-    # Filter and weight keywords
-    keywords = list(set(word for word in all_keywords if word not in comprehensive_stop_words))
+    keywords = list(set(word for word in all_keywords if word not in stop_words))
     
-    # Smart section extraction with relevance scoring
-    sections = text.split('\n=== PAGE')
+    # V6: Smarter section processing
+    sections = text.split('\n--- PAGE')
     relevant_sections = []
     
-    for section_idx, section in enumerate(sections):
+    for i, section in enumerate(sections):
         section_lower = section.lower()
-        relevance_score = 0
+        relevance = 0
         
-        # Basic keyword matching
+        # Basic keyword matches
         for keyword in keywords:
             if keyword in section_lower:
-                relevance_score += 1
+                relevance += 1
         
-        # Important phrase matching (highest weight)
-        for phrase in important_phrases:
-            if phrase in section_lower:
-                relevance_score += 5
-        
-        # Domain category matching with weights
-        for category, (terms, weight) in domain_categories.items():
+        # Domain-specific term matching with higher weight
+        for category, terms in domain_terms.items():
             for term in terms:
                 if term in section_lower:
-                    relevance_score += weight
+                    relevance += 3  # Higher weight for domain terms
         
-        # Structure bonuses
-        if re.search(r'(?:\d+\.|•|\*|\-)\s*[A-Z]', section):  # Lists/bullets
-            relevance_score += 1
-        
-        if re.search(r'\b(?:table|schedule|annexure|appendix)\b', section_lower):  # Tables
-            relevance_score += 2
+        # V6: Enhanced bonuses
+        if relevance > 5:
+            relevance += 3  # High relevance bonus
             
-        if re.search(r'\d+\s*(?:%|months?|years?|days?|₹|\$|lakh|crore)', section_lower):  # Numbers
-            relevance_score += 2
+        # Numerical data bonus
+        if re.search(r'\d+\s*(%|months?|years?|days?|₹)', section_lower):
+            relevance += 2
             
-        # Question type specific bonuses
-        for q_type in question_types:
-            if q_type == 'factual' and re.search(r'\d+', section):
-                relevance_score += 1
-            elif q_type == 'boolean' and any(word in section_lower for word in ['yes', 'no', 'covered', 'excluded']):
-                relevance_score += 1
-            elif q_type == 'temporal' and re.search(r'\d+\s*(?:months?|years?|days?)', section_lower):
-                relevance_score += 2
-        
-        # High relevance bonus
-        if relevance_score > 8:
-            relevance_score += 3
-            
-        if relevance_score > 0:
-            relevant_sections.append((section, relevance_score, section_idx))
+        if relevance > 0:
+            relevant_sections.append((section, relevance))
     
-    # Sort by relevance and select best sections
+    # Sort and combine best sections
     relevant_sections.sort(key=lambda x: x[1], reverse=True)
     
-    # Smart section combination with overlap prevention
     combined_text = ""
-    used_sections = set()
+    for section, score in relevant_sections[:20]:  # Top 20 sections
+        combined_text += section + "\n"
+        if len(combined_text) > 25000:  # Reasonable limit
+            break
     
-    for section, score, idx in relevant_sections[:25]:
-        if idx not in used_sections:
-            combined_text += section + "\n"
-            used_sections.add(idx)
-            if len(combined_text) > 28000:  # Optimized limit
-                break
-    
-    return combined_text if combined_text else text[:28000]
+    return combined_text if combined_text else text[:25000]
 
 def smart_question_preprocessing_v6(questions):
-    """V6: Smart question preprocessing with context enhancement"""
+    """V6: Enhanced question preprocessing (improved from V5)"""
     processed_questions = []
     
-    # Comprehensive abbreviation dictionary
+    # V6: More comprehensive abbreviation expansions
     abbreviations = {
         'PED': 'Pre-existing diseases',
         'ICU': 'Intensive Care Unit',
@@ -230,88 +176,73 @@ def smart_question_preprocessing_v6(questions):
         'TPA': 'Third Party Administrator',
         'AYUSH': 'Ayurveda Yoga Unani Siddha Homeopathy',
         'NCD': 'No Claim Discount',
-        'SI': 'Sum Insured',
-        'OPD': 'Out Patient Department',
-        'CCU': 'Cardiac Care Unit',
-        'ICCU': 'Intensive Cardiac Care Unit'
-    }
-    
-    # Context enhancement patterns
-    context_enhancements = {
-        r'\bgrace period\b(?! for)': 'grace period for premium payment',
-        r'\bwaiting period\b(?! for)': 'waiting period for coverage',
-        r'\broom rent\b(?! limit|restriction)': 'room rent limit and restrictions',
-        r'\bmaternity\b(?! expenses|coverage)': 'maternity expenses and coverage',
-        r'\bdeductible\b(?! amount)': 'deductible amount and conditions'
+        'SI': 'Sum Insured'
     }
     
     for question in questions:
+        # Expand abbreviations (like V5)
         processed_question = question
-        
-        # Expand abbreviations
         for abbrev, expansion in abbreviations.items():
             processed_question = re.sub(rf'\b{abbrev}\b', expansion, processed_question, flags=re.IGNORECASE)
         
-        # Add context
-        for pattern, replacement in context_enhancements.items():
-            processed_question = re.sub(pattern, replacement, processed_question, flags=re.IGNORECASE)
+        # V6: Enhanced context enhancement
+        if 'grace period' in processed_question.lower() and 'premium' not in processed_question.lower():
+            processed_question = processed_question.replace('grace period', 'grace period for premium payments')
         
-        # Enhance question structure
-        if processed_question.strip() and not processed_question.endswith('?'):
-            processed_question += '?'
+        if 'waiting period' in processed_question.lower() and 'disease' not in processed_question.lower():
+            processed_question = processed_question.replace('waiting period', 'waiting period for diseases or conditions')
+        
+        if 'room rent' in processed_question.lower() and 'limit' not in processed_question.lower():
+            processed_question = processed_question.replace('room rent', 'room rent limit')
         
         processed_questions.append(processed_question)
     
     return processed_questions
 
 def master_prompt_v6(questions_text, processed_text):
-    """V6: Master prompt with advanced instructions"""
-    return f"""EXPERT INSURANCE DOCUMENT ANALYZER - PRECISION MODE
+    """V6: Master prompt engineering (improved from V5)"""
+    return f"""EXPERT INSURANCE DOCUMENT ANALYZER - V6 PRECISION MODE
 
-You are a world-class insurance document analyst with perfect accuracy. Analyze the document and provide exactly what is asked.
+You are a world-class insurance document analyst with perfect accuracy. Analyze the document and provide precise answers.
 
 DOCUMENT CONTENT:
 {processed_text}
 
-QUESTIONS TO ANSWER:
+QUESTIONS TO ANALYZE:
 {questions_text}
 
-CRITICAL INSTRUCTIONS:
-✓ Extract EXACT numerical values with complete units (30 days, 24 months, 2 years, 5%, ₹50,000)
-✓ For YES/NO questions: Start with "Yes" or "No", then explain in 1-3 sentences
-✓ For amounts/limits: State exact figures with currency symbols as written
-✓ For time periods: Specify exact duration and what it applies to
-✓ For coverage questions: Clearly state what is covered and any conditions
-✓ Use simple, professional language - maximum 4 sentences per answer
-✓ If information is genuinely missing: "Information not specified in document"
+V6 ANSWER REQUIREMENTS:
+✓ Extract EXACT numerical values with units (30 days, 36 months, 2 years, 5%, ₹10,000)
+✓ For waiting/grace periods: Provide precise duration from document
+✓ For coverage questions: Start with "Yes" or "No", then explain briefly in 2-3 sentences
+✓ For amounts/limits: Include exact figures with currency symbols
+✓ Keep each answer 1-4 sentences maximum - BE CONCISE
+✓ Use simple, clear professional language
+✓ For Yes/No questions, start with clear Yes/No
+✓ If not found: "Information not specified in document"
+✓ Number your answers clearly (1., 2., 3., etc.)
 
-ANSWER FORMAT:
-- Direct, clear answers in 1-4 sentences
-- Include specific numbers, percentages, amounts exactly as stated
-- No extra formatting, quotes, or citations
-- Professional but simple language
-
-PROVIDE ACCURATE ANSWERS:"""
+PROVIDE PRECISE ACCURATE ANSWERS:"""
 
 def optimized_gemini_v6(prompt):
-    """V6: Optimized Gemini call with error recovery"""
+    """V6: Optimized Gemini call (improved from V5)"""
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
         
-        # Optimized settings for accuracy and speed
+        # V6: Balanced settings for speed and accuracy
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
-                temperature=0.05,  # Very low for consistency
-                max_output_tokens=1200,  # Balanced for quality answers
-                top_p=0.92,  # High for comprehensive responses
-                top_k=35   # Balanced for word variety
+                temperature=0.1,  # Low but not zero for better responses
+                max_output_tokens=1000,  # Balanced for good answers
+                top_p=0.9,  # High for comprehensive responses
+                top_k=30   # Balanced
             ),
             safety_settings=[
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
             ]
         )
         
@@ -327,10 +258,10 @@ def optimized_gemini_v6(prompt):
     except Exception as e:
         print(f"Gemini API error: {e}")
         
-        # Triple fallback strategy
+        # V6: Enhanced fallback - FIXED SYNTAX ERROR
         try:
-            # Fallback 1: Simplified prompt
-            simple_prompt = prompt.replace("PRECISION MODE", "SIMPLE MODE")[:5000]
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            simple_prompt = f"Answer these questions from the document in 1-4 sentences each:\n{prompt[-2000:]}"
             simple_response = model.generate_content(
                 simple_prompt,
                 generation_config=genai.types.GenerationConfig(temperature=0.2, max_output_tokens=800)
@@ -338,69 +269,57 @@ def optimized_gemini_v6(prompt):
             if simple_response and simple_response.text:
                 return simple_response.text.strip()
         except:
-            try:
-                # Fallback 2: Basic prompt
-                basic_prompt = f"Answer these questions from the document:\n{prompt[-2000:]}"
-                basic_response = model.generate_content(basic_prompt)
-                if basic_response and basic_response.text:
-                    return basic_response.text.strip()
-            except:
-                pass
+            pass
         
-        return f"Error: Unable to process request"
+        return "Error processing questions"
 
 def extract_answers_v6(doc_url, questions):
-    """V6: Master extraction with all optimizations"""
+    """V6: Master extraction combining V5 reliability with V6 enhancements"""
     try:
         print("🚀 Starting V6 MASTER extraction...")
         start_time = time.time()
         
-        # Step 1: Enhanced PDF extraction
-        print("📄 Advanced PDF extraction with fallbacks...")
+        # Step 1: Reliable PDF extraction (using V5 method)
+        print("📄 Reliable PDF extraction...")
         pdf_text = download_and_extract_text_v6(doc_url)
         
         if not pdf_text.strip():
+            print("❌ No text extracted")
             return ["No text found in document."] * len(questions)
 
         extraction_time = time.time() - start_time
         print(f"📊 Extracted {len(pdf_text)} chars in {extraction_time:.2f}s")
 
-        # Step 2: Smart question preprocessing
-        print("🧠 Smart question preprocessing...")
+        # Step 2: Enhanced question preprocessing
+        print("🧠 Enhanced question preprocessing...")
         processed_questions = smart_question_preprocessing_v6(questions)
 
-        # Step 3: Intelligent keyword extraction
-        process_start = time.time()
-        if len(pdf_text) > 28000:
-            print("🔍 Large document - using intelligent extraction...")
+        # Step 3: Smart keyword extraction
+        if len(pdf_text) > 25000:
+            print("🔍 Large document - using smart extraction...")
             processed_text = intelligent_keyword_extraction_v6(pdf_text, processed_questions)
         else:
-            print("📋 Document size optimal - using enhanced full content...")
+            print("📋 Small document - using full content...")
             processed_text = pdf_text
 
-        process_time = time.time() - process_start
-        print(f"🔍 Processed {len(processed_text)} chars in {process_time:.2f}s")
+        print(f"🔍 Processing {len(processed_text)} chars of relevant content")
 
-        # Step 4: Create master prompt
+        # Step 4: Create enhanced prompt
         questions_text = "\n".join([f"{i+1}. {q}" for i, q in enumerate(processed_questions)])
         prompt = master_prompt_v6(questions_text, processed_text)
         
         # Step 5: Optimized API call
-        print("🤖 Getting master-level answers...")
+        print("🤖 Getting V6 enhanced answers...")
         api_start = time.time()
         response = optimized_gemini_v6(prompt)
         api_time = time.time() - api_start
         print(f"🤖 API response in {api_time:.2f}s")
         
-        # Step 6: Master parsing
-        print("📝 Master parsing with validation...")
-        parse_start = time.time()
+        # Step 6: Enhanced parsing
         answers = master_parse_v6(response, len(questions), questions)
-        parse_time = time.time() - parse_start
         
         total_time = time.time() - start_time
-        print(f"✅ V6 MASTER completed in {total_time:.2f}s!")
-        print(f"   📊 Breakdown: Extract({extraction_time:.1f}s) + Process({process_time:.1f}s) + API({api_time:.1f}s) + Parse({parse_time:.1f}s)")
+        print(f"✅ V6 MASTER completed in {total_time:.2f}s total!")
         
         return answers
         
@@ -409,58 +328,44 @@ def extract_answers_v6(doc_url, questions):
         return [f"V6 Error: {str(e)}"] * len(questions)
 
 def master_parse_v6(text: str, expected_count: int, original_questions: List[str]) -> List[str]:
-    """V6: Master parsing with comprehensive validation"""
+    """V6: Enhanced parsing (improved from V5)"""
     answers = []
     
-    # Strategy 1: Advanced numbered parsing
+    # Strategy 1: Numbered parsing (like V5 but enhanced)
     pattern = r'^\s*(\d+)\.\s*(.+?)(?=^\s*\d+\.|$)'
     matches = re.findall(pattern, text, re.MULTILINE | re.DOTALL)
     
     if matches and len(matches) >= expected_count:
         for i in range(1, expected_count + 1):
-            found = False
             for num_str, answer_text in matches:
                 if int(num_str) == i:
-                    # Advanced cleaning and validation
-                    clean_answer = clean_and_validate_answer_v6(
-                        answer_text.strip(), 
-                        original_questions[i-1] if i <= len(original_questions) else ""
-                    )
+                    # V6: Enhanced cleaning
+                    clean_answer = clean_and_validate_answer_v6(answer_text.strip(), original_questions[i-1] if i <= len(original_questions) else "")
                     answers.append(clean_answer)
-                    found = True
                     break
-            
-            if not found:
-                answers.append("Information not specified in document")
     
-    # Strategy 2: Enhanced fallback parsing
+    # Strategy 2: Fallback parsing (like V5)
     if len(answers) < expected_count:
         lines = [line.strip() for line in text.split('\n') if line.strip()]
-        fallback_answers = []
+        current_answers = []
         current_answer = ""
         
         for line in lines:
-            if any(marker in line for marker in ['📋', 'Source:', '---']):
-                continue
-                
             if re.match(r'^\d+\.', line):
                 if current_answer:
-                    clean_ans = clean_and_validate_answer_v6(current_answer.strip(), "")
-                    fallback_answers.append(clean_ans)
+                    validated = clean_and_validate_answer_v6(current_answer.strip(), "")
+                    current_answers.append(validated)
                 current_answer = re.sub(r'^\d+\.\s*', '', line)
             else:
                 current_answer += " " + line
         
         if current_answer:
-            clean_ans = clean_and_validate_answer_v6(current_answer.strip(), "")
-            fallback_answers.append(clean_ans)
+            validated = clean_and_validate_answer_v6(current_answer.strip(), "")
+            current_answers.append(validated)
         
-        # Use fallback answers to fill gaps
-        while len(answers) < expected_count and len(fallback_answers) > 0:
-            if len(fallback_answers) > len(answers):
-                answers.append(fallback_answers[len(answers)])
-            else:
-                break
+        # Fill gaps
+        while len(answers) < expected_count and len(current_answers) > len(answers):
+            answers.append(current_answers[len(answers)])
     
     # Ensure exact count
     while len(answers) < expected_count:
@@ -469,47 +374,32 @@ def master_parse_v6(text: str, expected_count: int, original_questions: List[str
     return answers[:expected_count]
 
 def clean_and_validate_answer_v6(answer: str, question: str) -> str:
-    """V6: Advanced answer cleaning and validation"""
+    """V6: Enhanced answer validation (improved from V5)"""
     if not answer or len(answer.strip()) < 3:
         return "Information not specified in document"
     
     # Clean the answer
-    answer = re.sub(r'\n+', ' ', answer)
     answer = re.sub(r'\s+', ' ', answer).strip()
     
-    # Remove formatting artifacts
-    answer = re.sub(r'[📋"\'`\*]', '', answer)
-    answer = re.sub(r'Source:.*$', '', answer, flags=re.MULTILINE)
-    
-    # Check for non-answer patterns
+    # V6: Enhanced non-answer detection
     non_answers = [
-        'not mentioned', 'not specified', 'not found', 'unclear', 'cannot determine',
-        'unable to find', 'no information', 'not available', 'not stated', 'not clear'
+        'not mentioned', 'not specified', 'not found', 'unclear', 
+        'cannot determine', 'unable to find', 'no information',
+        'not available', 'not stated', 'not clear'
     ]
     
     if any(pattern in answer.lower() for pattern in non_answers):
         return "Information not specified in document"
     
-    # Enhanced Yes/No question handling
-    if question:
-        q_lower = question.lower()
-        if ('does' in q_lower or 'is' in q_lower or 'are' in q_lower) and question.endswith('?'):
-            answer_lower = answer.lower()
-            if not (answer_lower.startswith('yes') or answer_lower.startswith('no')):
-                # Smart yes/no detection
-                positive_keywords = ['cover', 'include', 'available', 'provided', 'applicable', 'eligible', 'allowed']
-                negative_keywords = ['not', 'exclude', 'does not', 'is not', 'are not', 'unavailable', 'excluded']
-                
-                if any(keyword in answer_lower for keyword in positive_keywords):
-                    answer = "Yes, " + answer
-                elif any(keyword in answer_lower for keyword in negative_keywords):
-                    answer = "No, " + answer
+    # V6: Enhanced Yes/No question handling
+    if question and ('does' in question.lower() or 'is' in question.lower() or 'are' in question.lower()) and question.endswith('?'):
+        if not (answer.lower().startswith('yes') or answer.lower().startswith('no')):
+            if any(word in answer.lower() for word in ['cover', 'include', 'available', 'provided']):
+                answer = "Yes, " + answer
+            elif any(word in answer.lower() for word in ['not', 'exclude', 'does not', 'unavailable']):
+                answer = "No, " + answer
     
-    # Ensure proper sentence structure
-    if not answer.endswith('.') and len(answer) > 10:
-        answer += "."
-    
-    # Limit to 4 sentences maximum
+    # Limit to 4 sentences for simplicity
     sentences = re.split(r'[.!?]+', answer)
     if len(sentences) > 4:
         answer = '. '.join(sentences[:4]) + '.'
